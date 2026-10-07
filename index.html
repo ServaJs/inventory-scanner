@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<!-- ============================================================
+     index.html — Product QR Inventory System (single page)
+     Tabs: Products | Generate Labels | Scan & Count
+     ============================================================ -->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>QR Inventory</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<!-- Everything inside .app is hidden when printing (see styles.css) -->
+<div class="app">
+  <header class="topbar">
+    <h1>📦 QR Inventory</h1>
+    <nav class="tabs" id="tabs">
+      <button class="tab active" data-tab="products">Products</button>
+      <button class="tab" data-tab="generate">Generate Labels</button>
+      <button class="tab" data-tab="scan">Scan &amp; Count</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- ======================= PRODUCTS TAB ======================= -->
+    <section id="tab-products" class="tabpane active">
+      <div class="dash">
+        <div class="stat"><span id="stProducts">0</span><label>Products</label></div>
+        <div class="stat"><span id="stUnits">0</span><label>Total units</label></div>
+        <div class="stat ok"><span id="stStock">0</span><label>In stock</label></div>
+        <div class="stat bad"><span id="stMissing">0</span><label>Missing</label></div>
+      </div>
+
+      <div class="card">
+        <div class="toolbar">
+          <input type="search" id="fSearch" placeholder="Search ID, name, SKU, category…" />
+          <select id="fStatus">
+            <option value="">All statuses</option>
+            <option value="in stock">In stock</option>
+            <option value="missing">Missing</option>
+          </select>
+          <select id="fCategory"><option value="">All categories</option></select>
+        </div>
+
+        <div class="toolbar wrap">
+          <button id="bulkLabels" class="btn">🖨 Labels for selected</button>
+          <button id="bulkStock" class="btn">Mark in stock</button>
+          <button id="bulkMissing" class="btn">Mark missing</button>
+          <button id="bulkDelete" class="btn danger">Delete selected</button>
+          <span id="selCount" class="muted"></span>
+        </div>
+
+        <div class="toolbar wrap">
+          <button id="expJson" class="btn">⬇ Export JSON</button>
+          <button id="expCsv" class="btn">⬇ Export CSV</button>
+          <label class="btn file">⬆ Import JSON/CSV
+            <input type="file" id="impFile" accept=".json,.csv,application/json,text/csv" hidden />
+          </label>
+        </div>
+
+        <div class="tablewrap">
+          <table id="unitTable">
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="selAll" title="Select all shown" /></th>
+                <th>Unit ID</th><th>Product</th><th>SKU</th><th>Category</th>
+                <th>Created</th><th>Status</th><th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="tableNote" class="muted"></p>
+      </div>
+    </section>
+
+    <!-- ======================= GENERATE TAB ======================= -->
+    <section id="tab-generate" class="tabpane">
+      <div class="card">
+        <h2>New product / batch</h2>
+        <form id="genForm" class="grid-form">
+          <label>Product name *
+            <input id="pName" required maxlength="80" placeholder="e.g. Blue Ceramic Mug" />
+          </label>
+          <label>SKU / Code *
+            <input id="pSku" required maxlength="24" placeholder="e.g. MUG-BLU" />
+          </label>
+          <label>Category
+            <input id="pCat" maxlength="40" placeholder="e.g. Kitchenware" list="catList" />
+            <datalist id="catList"></datalist>
+          </label>
+          <label>Quantity to generate *
+            <input id="pQty" type="number" min="1" max="500" value="1" required />
+          </label>
+          <label class="full">Notes (optional)
+            <textarea id="pNotes" rows="2" maxlength="300"></textarea>
+          </label>
+          <button class="btn primary full" type="submit">Generate unique QR codes</button>
+        </form>
+        <p class="muted">Each unit gets its own ID (SKU-0001, SKU-0002…). Numbers are never reused, even after deletion.</p>
+      </div>
+
+      <div class="card">
+        <h2>Label sheet</h2>
+        <div class="grid-form opts">
+          <label>Label size
+            <select id="optSize">
+              <option value="25">Small (25 mm)</option>
+              <option value="40" selected>Medium (40 mm)</option>
+              <option value="50">Large (50 mm)</option>
+            </select>
+          </label>
+          <label>Labels per row
+            <input id="optPerRow" type="number" min="1" max="8" value="4" />
+          </label>
+          <label>Paper
+            <select id="optPaper">
+              <option value="a4">A4</option>
+              <option value="letter">Letter</option>
+            </select>
+          </label>
+          <label class="check"><input id="optText" type="checkbox" checked /> Show name &amp; ID text</label>
+        </div>
+        <div class="toolbar wrap">
+          <button id="btnPrint" class="btn primary">🖨 Print</button>
+          <button id="btnPdf" class="btn">⬇ PDF (sheet)</button>
+          <button id="btnPng" class="btn">⬇ PNG (sheet)</button>
+          <button id="btnClearSheet" class="btn">Clear sheet</button>
+          <span id="sheetInfo" class="muted"></span>
+        </div>
+        <div class="sheetwrap"><div id="sheet"></div></div>
+        <p id="sheetEmpty" class="muted">No labels yet. Generate a batch above, or pick units in the Products tab and choose “Labels for selected” / “Label”.</p>
+      </div>
+    </section>
+
+    <!-- ======================= SCAN TAB ======================= -->
+    <section id="tab-scan" class="tabpane">
+      <div class="card">
+        <h2>Stock count</h2>
+        <label class="inline">Count scope
+          <select id="scanScope"></select>
+        </label>
+        <div class="toolbar wrap">
+          <button id="btnStart" class="btn primary">▶ Start Count</button>
+          <button id="btnStop" class="btn" disabled>⏸ Pause camera</button>
+          <button id="btnSwitch" class="btn" disabled>🔄 Switch camera</button>
+          <button id="btnFinish" class="btn ok" disabled>✔ Finish Count</button>
+          <button id="btnDiscard" class="btn danger" disabled>Discard</button>
+        </div>
+
+        <div id="reader"></div>
+        <div id="camError" class="alert bad" hidden></div>
+        <div id="feedback" class="feedback">Ready. Press “Start Count”.</div>
+
+        <form id="manualForm" class="toolbar">
+          <input id="manualCode" placeholder="Manual entry, e.g. MUG-BLU-0001" autocapitalize="characters" autocomplete="off" />
+          <button class="btn" type="submit">Add</button>
+        </form>
+      </div>
+
+      <div class="card" id="livePanel">
+        <h2>Live count</h2>
+        <div class="dash small">
+          <div class="stat ok"><span id="lvTotal">0</span><label>Counted</label></div>
+          <div class="stat warn"><span id="lvDup">0</span><label>Duplicates</label></div>
+          <div class="stat bad"><span id="lvUnknown">0</span><label>Unknown</label></div>
+        </div>
+        <div class="tablewrap">
+          <table id="liveTable">
+            <thead><tr><th>Product</th><th>Scanned</th><th>Expected</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <h3>Latest scans</h3>
+        <ul id="scanLog" class="log"></ul>
+      </div>
+
+      <div class="card" id="reportCard" hidden>
+        <h2>Count report</h2>
+        <p id="reportMeta" class="muted"></p>
+        <div class="tablewrap">
+          <table id="reportTable">
+            <thead><tr><th>Product</th><th>SKU</th><th>Counted</th><th>Expected</th><th>Diff</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <h3>Missing units (<span id="repMissingN">0</span>)</h3>
+        <div id="repMissing" class="chips"></div>
+        <h3>Unknown codes (<span id="repUnknownN">0</span>)</h3>
+        <div id="repUnknown" class="chips"></div>
+        <div class="toolbar wrap">
+          <button id="repApply" class="btn primary">Update stock status</button>
+          <button id="repCsv" class="btn">⬇ Export report CSV</button>
+          <button id="repClose" class="btn">Close report</button>
+        </div>
+        <p class="muted">“Update stock status” sets counted units to <b>in stock</b> and uncounted units (in the chosen scope) to <b>missing</b>.</p>
+      </div>
+    </section>
+  </main>
+  <div id="toast" class="toast" hidden></div>
+</div>
+
+<!-- Print-only container: filled with a copy of the label sheet right before window.print() -->
+<div id="printRoot"></div>
+
+<!-- Libraries (CDN, each with a second CDN as fallback).
+     qrcode = QR generator, html5-qrcode = camera scanner, jsPDF = PDF export.
+     NOTE: qrcode must be 1.4.4 — newer npm releases (1.5.x) do not ship a browser build. -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
+<script>window.QRCode || document.write('<script src="https://unpkg.com/qrcode@1.4.4/build/qrcode.min.js">\x3C/script>')</script>
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>window.Html5Qrcode || document.write('<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js">\x3C/script>')</script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script>window.jspdf || document.write('<script src="https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js">\x3C/script>')</script>
+<script src="app.js"></script>
+</body>
+</html>
