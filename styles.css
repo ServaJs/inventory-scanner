@@ -225,12 +225,26 @@ td.neg { color: var(--bad); font-weight: 700; }
    PRINT — only the label sheet is printed.
    JS copies the preview into #printRoot and injects the @page size.
    ============================================================ */
+/* Print styles for sheet rendering */
 #printRoot { display: none; }
 
 @media print {
-  html, body { background: #fff !important; }
-  .app { display: none !important; }       /* hide the whole UI */
-  #printRoot { display: block; }
-  #printRoot .sheet { margin: 0 auto; }
-  .lbl { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html, body { 
+    background: #fff !important; 
+    margin: 0 !important; 
+    padding: 0 !important; 
+  }
+  .app { display: none !important; }
+  #printRoot { display: block !important; }
+  #printRoot .sheet { 
+    margin: 0 auto !important; 
+    display: flex !important; 
+    flex-wrap: wrap !important; 
+  }
+  .lbl { 
+    -webkit-print-color-adjust: exact; 
+    print-color-adjust: exact; 
+    break-inside: avoid; 
+    page-break-inside: avoid; 
+  }
 }

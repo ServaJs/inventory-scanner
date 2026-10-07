@@ -391,17 +391,17 @@
   const textHeight = (size) => (size <= 25 ? 6 : 8);                 // mm reserved for name + ID
   const fontPt = (size) => (size <= 25 ? 5 : size <= 40 ? 7 : 8);
 
-  function getOpts() {
-    const size = parseInt($('#optSize').value, 10);
-    const paper = $('#optPaper').value;
-    const maxFit = Math.max(1, Math.floor((PAPER[paper].w - 2 * PAGE_MARGIN) / (size + GAP)));
-    let perRow = parseInt($('#optPerRow').value, 10);
-    if (!(perRow >= 1)) perRow = 1;
-    if (perRow > 8) perRow = 8;
-    const limited = perRow > maxFit;
-    if (limited) perRow = maxFit;
-    return { size, paper, perRow, limited, maxFit, showText: $('#optText').checked };
-  }
+ function getOpts() {
+  const size = parseFloat($('#optSize').value);
+  const paper = $('#optPaper').value;
+  const maxFit = Math.max(1, Math.floor((PAPER[paper].w - 2 * PAGE_MARGIN) / (size + GAP)));
+  let perRow = parseInt($('#optPerRow').value, 10);
+  if (!(perRow >= 1)) perRow = 1;
+  if (perRow > 8) perRow = 8;
+  const limited = perRow > maxFit;
+  if (limited) perRow = maxFit;
+  return { size, paper, perRow, limited, maxFit, showText: $('#optText').checked };
+}
 
   /** Apply options to the on-screen sheet (no need to regenerate the QR images). */
   function applySheetOpts() {
@@ -455,22 +455,48 @@
   }
 
   /* ---------- Print ---------- */
-  function doPrint() {
-    const units = sheetUnits();
-    if (!units.length) { toast('Nothing to print — generate or select labels first.', 'warn'); return; }
-    if (!sheetReady) { toast('Labels are still rendering, try again in a moment.', 'warn'); return; }
-    const o = getOpts();
-    // 1) set the paper size for @page   2) copy the sheet into the print-only container   3) print
-    let ps = $('#pageStyle');
-    if (!ps) { ps = document.createElement('style'); ps.id = 'pageStyle'; document.head.appendChild(ps); }
-    ps.textContent = '@page { size: ' + PAPER[o.paper].css + ' portrait; margin: ' + PAGE_MARGIN + 'mm; }';
-    const clone = $('#sheet').cloneNode(true);
-    clone.removeAttribute('id');
-    const root = $('#printRoot');
-    root.innerHTML = '';
-    root.appendChild(clone);
-    window.print();
+ function doPrint() {
+  const units = sheetUnits();
+  if (!units.length) { toast('Nothing to print — generate or select labels first.', 'warn'); return; }
+  if (!sheetReady) { toast('Labels are still rendering, try again in a moment.', 'warn'); return; }
+  const o = getOpts();
+
+  // Create or update print style element
+  let ps = $('#pageStyle');
+  if (!ps) { 
+    ps = document.createElement('style'); 
+    ps.id = 'pageStyle'; 
+    document.head.appendChild(ps); 
   }
+  
+  ps.textContent = `
+    @media print {
+      @page { 
+        size: ${PAPER[o.paper].css} portrait; 
+        margin: ${PAGE_MARGIN}mm; 
+      }
+      body * { visibility: hidden !important; }
+      #printRoot, #printRoot * { visibility: visible !important; }
+      #printRoot { 
+        position: absolute !important; 
+        left: 0 !important; 
+        top: 0 !important; 
+        width: 100% !important; 
+        display: block !important; 
+      }
+    }
+  `;
+
+  const clone = $('#sheet').cloneNode(true);
+  clone.removeAttribute('id');
+  const root = $('#printRoot');
+  root.innerHTML = '';
+  root.appendChild(clone);
+
+  setTimeout(() => {
+    window.print();
+  }, 150);
+}
   window.addEventListener('afterprint', () => { $('#printRoot').innerHTML = ''; });
 
   /* ---------- PDF / PNG layout (millimetres) ---------- */
@@ -494,38 +520,62 @@
   }
 
   async function downloadSheetPdf() {
-    const units = sheetUnits();
-    if (!units.length) { toast('Nothing to export yet.', 'warn'); return; }
-    if (!window.jspdf) { toast('PDF library not loaded (check your internet connection).', 'bad'); return; }
-    const o = getOpts();
-    const L = layout(units, o, true);
-    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: o.paper === 'a4' ? 'a4' : 'letter', orientation: 'portrait' });
-    const fit = (s, maxW) => {               // shorten text with "..." so it fits the label width
-      if (doc.getTextWidth(s) <= maxW) return s;
-      let t = s;
-      while (t.length > 1 && doc.getTextWidth(t + '...') > maxW) t = t.slice(0, -1);
-      return t + '...';
-    };
-    try {
-      for (let pi = 0; pi < L.pages.length; pi++) {
-        if (pi > 0) doc.addPage();
-        doc.setLineWidth(0.25); doc.setDrawColor(136); doc.setLineDashPattern([1, 1], 0);   // dashed cut lines
-        for (const it of L.pages[pi]) {
-          doc.addImage(await qrDataUrl(it.u.id), 'PNG', it.x, it.y, L.lw, L.lw);
-          doc.rect(it.x, it.y, L.lw, L.lh, 'S');
-          if (o.showText) {
-            const th = textHeight(o.size), cx = it.x + L.lw / 2, ty = it.y + L.lw;
-            doc.setTextColor(0); doc.setFontSize(fontPt(o.size));
-            doc.setFont('helvetica', 'normal');
-            doc.text(fit(it.u.name, L.lw - 1.5), cx, ty + th * 0.45, { align: 'center' });
-            doc.setFont('courier', 'bold');
-            doc.text(fit(it.u.id, L.lw - 1.5), cx, ty + th * 0.85, { align: 'center' });
-          }
+  const units = sheetUnits();
+  if (!units.length) { toast('Nothing to export yet.', 'warn'); return; }
+  if (!window.jspdf) { toast('PDF library not loaded (check your internet connection).', 'bad'); return; }
+  const o = getOpts();
+  const L = layout(units, o, true);
+  
+  const doc = new window.jspdf.jsPDF({ 
+    unit: 'mm', 
+    format: o.paper === 'a4' ? 'a4' : 'letter', 
+    orientation: 'portrait' 
+  });
+
+  const fit = (s, maxW) => {
+    if (doc.getTextWidth(s) <= maxW) return s;
+    let t = s;
+    while (t.length > 1 && doc.getTextWidth(t + '...') > maxW) t = t.slice(0, -1);
+    return t + '...';
+  };
+
+  try {
+    for (let pi = 0; pi < L.pages.length; pi++) {
+      if (pi > 0) doc.addPage();
+      doc.setLineWidth(0.25);
+      doc.setDrawColor(136);
+      doc.setLineDashPattern([1, 1], 0);
+
+      for (const it of L.pages[pi]) {
+        // Draw QR Image
+        const qrUrl = await qrDataUrl(it.u.id);
+        doc.addImage(qrUrl, 'PNG', it.x, it.y, L.lw, L.lw);
+        
+        // Draw Label Boundary Box
+        doc.rect(it.x, it.y, L.lw, L.lh, 'S');
+
+        // Render Text Below QR Code if enabled
+        if (o.showText) {
+          const th = textHeight(o.size);
+          const cx = it.x + L.lw / 2;
+          const ty = it.y + L.lw;
+
+          doc.setTextColor(0);
+          doc.setFontSize(fontPt(o.size));
+          doc.setFont('helvetica', 'normal');
+          doc.text(fit(it.u.name, L.lw - 1.5), cx, ty + th * 0.4, { align: 'center' });
+          
+          doc.setFont('courier', 'bold');
+          doc.text(fit(it.u.id, L.lw - 1.5), cx, ty + th * 0.8, { align: 'center' });
         }
       }
-      doc.save('labels-' + stamp() + '.pdf');
-    } catch (err) { toast('PDF export failed: ' + err.message, 'bad'); }
+    }
+    doc.save('labels-1x1-' + stamp() + '.pdf');
+    toast('PDF downloaded successfully.', 'ok');
+  } catch (err) { 
+    toast('PDF export failed: ' + err.message, 'bad'); 
   }
+}
 
   /* ---------- PNG helpers ---------- */
   const loadImg = (url) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
