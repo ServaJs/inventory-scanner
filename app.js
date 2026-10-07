@@ -777,7 +777,9 @@
       html5 = new Html5Qrcode('reader', { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE], verbose: false });
       const source = camIdx >= 0 && cameras[camIdx] ? { deviceId: { exact: cameras[camIdx].id } } : { facingMode: 'environment' };  // rear camera first
       await html5.start(source,
-        { fps: 10, qrbox: (w, h) => { const s = Math.floor(Math.min(w, h) * 0.75); return { width: s, height: s }; } },
+        // qrbox = the square scan area. The library throws if it is under 50px, and it can call this
+        // before the video has a height (h = 0), so guard against that.
+        { fps: 10, qrbox: (w, h) => { const s = Math.max(50, Math.floor(Math.min(w || 0, h || w || 0) * 0.75)); return { width: s, height: s }; } },
         (text) => processCode(text, 'camera'),
         () => { /* per-frame "no QR found" — ignore */ });
       scanning = true;
