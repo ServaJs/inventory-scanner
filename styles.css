@@ -150,7 +150,31 @@ td.neg { color: var(--bad); font-weight: 700; }
 .sheet.notext .lbl-text { display: none; }
 
 /* ---------- Scanner ---------- */
-#reader { width: 100%; max-width: 480px; margin: 12px auto; border-radius: 12px; overflow: hidden; background: #000; }
+/* Replace the existing #reader rules with this block */
+#reader {
+  width: 100%;
+  max-width: 480px;
+  min-height: 250px;
+  margin: 12px auto;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+  position: relative;
+}
+
+/* Ensure internal camera elements render properly */
+#reader video {
+  width: 100% !important;
+  height: auto !important;
+  display: block !important;
+  object-fit: cover;
+}
+
+#reader canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
 #reader:empty { display: none; }
 .alert { padding: 12px; border-radius: 8px; margin: 10px 0; font-size: 0.92rem; }
 .alert.bad { background: #fce8e6; color: #a50e0e; border: 1px solid var(--bad); }
